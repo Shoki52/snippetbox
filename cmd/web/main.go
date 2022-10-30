@@ -3,52 +3,60 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"github.com/alexedwards/scs/mysqlstore" // New import
+	"github.com/alexedwards/scs/v2"         // New import
+	"github.com/go-playground/form/v4"
 	_ "github.com/go-sql-driver/mysql"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"snippetbox.shoki52.net/internal/models"
+	"time" // New import
 )
 
 type application struct {
-	infoLog  *log.Logger
-	errorLog *log.Logger
-	snippets *models.SnippetModel
+	errorLog       *log.Logger
+	infoLog        *log.Logger
+	snippets       *models.SnippetModel
+	templateCache  map[string]*template.Template
+	formDecoder    *form.Decoder
+	sessionManager *scs.SessionManager
 }
 
 func main() {
 	addr := flag.String("addr", ":4000", "HTTP network address")
-
-	dsn := flag.String("dsn", "web:1234567@/snippetbox?parseTime=true", "bin")
-
+	dsn := flag.String("dsn", "web:pass@/snippetbox?parseTime=true", "MySQL data source name")
 	flag.Parse()
-
-	infoLog := log.New(os.Stdout, "INFO/t", log.Ldate|log.Ltime)
-	errorLog := log.New(os.Stderr, "ERROR/t", log.Ldate|log.Ltime|log.Lshortfile)
-
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 	db, err := openDB(*dsn)
 	if err != nil {
 		errorLog.Fatal(err)
 	}
-
 	defer db.Close()
-
-	app := &application{
-		errorLog: errorLog,
-		infoLog:  infoLog,
-		snippets: &models.SnippetModel{DB: db},
+	templateCache, err := newTemplateCache()
+	if err != nil {
+		errorLog.Fatal(err)
 	}
-
-	mux := http.NewServeMux()
-
-	fileServer := http.FileServer(http.Dir("./ui/static/"))
-	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
-
-	mux.HandleFunc("/", app.home)
-	mux.HandleFunc("/snippet/view", app.snippetView)
-	mux.HandleFunc("/snippet/create", app.snippetCreate)
-
-	srv := http.Server{
+	formDecoder := form.NewDecoder()
+	// Use the scs.New() function to initialize a new session manager. Then we
+	// configure it to use our MySQL database as the session store, and set a
+	// lifetime of 12 hours (so that sessions automatically expire 12 hours
+	// after first being created).
+	sessionManager := scs.New()
+	sessionManager.Store = mysqlstore.New(db)
+	sessionManager.Lifetime = 12 * time.Hour
+	// And add the session manager to our application dependencies.
+	app := &application{
+		errorLog:       errorLog,
+		infoLog:        infoLog,
+		snippets:       &models.SnippetModel{DB: db},
+		templateCache:  templateCache,
+		formDecoder:    formDecoder,
+		sessionManager: sessionManager,
+	}
+	srv := &http.Server{
 		Addr:     *addr,
 		ErrorLog: errorLog,
 		Handler:  app.routes(),
