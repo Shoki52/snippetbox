@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/julienschmidt/httprouter" // New import
+	"io/ioutil"
 	"net/http"
 	"snippetbox.shoki52.net/internal/models"
 	"snippetbox.shoki52.net/internal/validator"
@@ -51,14 +52,11 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
 
 func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
 	data := app.newTemplateData(r)
-	// Initialize a new createSnippetForm instance and pass it to the template.
-	// Notice how this is also a great opportunity to set any default or
-	// 'initial' values for the form --- here we set the initial value for the
-	// snippet expiry to 365 days.
 	data.Form = snippetCreateForm{
 		Expires: 365,
 	}
 	app.render(w, http.StatusOK, "create.tmpl", data)
+
 }
 
 func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +98,7 @@ type userSignupForm struct {
 	Name                string `form:"name"`
 	Email               string `form:"email"`
 	Password            string `form:"password"`
+	Image               any    `form:"password"`
 	validator.Validator `form:"-"`
 }
 
@@ -216,4 +215,30 @@ func (app *application) userLogoutPost(w http.ResponseWriter, r *http.Request) {
 	app.sessionManager.Put(r.Context(), "flash", "You've been logged out successfully!")
 	// Redirect the user to the application home page.
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (app *application) uploadFile(w http.ResponseWriter, r *http.Request) {
+	r.ParseMultipartForm(10 << 20)
+	file, handler, err := r.FormFile("myFile")
+	if err != nil {
+		fmt.Println("Error Retrieving the File")
+		fmt.Println(err)
+		return
+	}
+	defer file.Close()
+	fmt.Printf("Uploaded File: %+v\n", handler.Filename)
+	fmt.Printf("File Size: %+v\n", handler.Size)
+	fmt.Printf("MIME Header: %+v\n", handler.Header)
+	tempFile, err := ioutil.TempFile("img", "upload-*.png")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer tempFile.Close()
+	fileBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println(err)
+	}
+	tempFile.Write(fileBytes)
+	fmt.Fprintf(w, "Successfully Uploaded File\n")
+	fmt.Fprintf(w, "Uploading File")
 }

@@ -1,16 +1,27 @@
 {{define "title"}}Snippet #{{.Snippet.ID}}{{end}}
 {{define "main"}}
-{{with .Snippet}}
+{{if .Snippet}}
+<div>
+<form
+      enctype="multipart/form-data"
+      action="/upload"
+      method="post">
+      <input type='hidden' name='csrf_token' value='{{.CSRFToken}}'>
+      <input type="file" name="myFile" />
+      <input type="submit" value="upload" />
+    </form>
+ </div>
 <div class='snippet'>
 <div class='metadata'>
-<strong>{{.Title}}</strong>
-<span>#{{.ID}}</span>
+<strong>{{.Snippet.Title}}</strong>
+<span>#{{.Snippet.ID}}</span>
 </div>
-<pre><code>{{.Content}}</code></pre>
+<div>
+<pre><code>{{.Snippet.Content}}</code></pre>
 <div class='metadata'>
 <!-- Use the new template function here -->
-<time>Created: {{humanDate .Created}}</time>
-<time>Expires: {{humanDate .Expires}}</time>
+<time>Created: {{humanDate .Snippet.Created}}</time>
+<time>Expires: {{humanDate .Snippet.Expires}}</time>
 </div>
 </div>
 {{end}}
